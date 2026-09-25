@@ -1,4 +1,4 @@
-export type WeightConfig = { severity_weight: number; importance_weight: number; students_weight: number; alternative_weight: number; condition_weight: number; critical_threshold: number; high_threshold: number; medium_threshold: number };
+export type WeightConfig = { config_id: string; severity_weight: number; importance_weight: number; students_weight: number; alternative_weight: number; condition_weight: number; critical_threshold: number; high_threshold: number; medium_threshold: number };
 const alternativeScores: Record<string, number> = { NONE: 100, PARTIAL: 50, FULL: 0 };
 const conditionScores: Record<string, number> = { GOOD: 0, FAIR: 50, POOR: 100, NOT_APPLICABLE: 100 };
 
