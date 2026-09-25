@@ -1,0 +1,15 @@
+import { Request } from 'express';
+import { ApiError } from './errors';
+
+export function pagination(req: Request) {
+  const page = Number(req.query.page ?? 1);
+  const pageSize = Number(req.query.page_size ?? 20);
+  if (!Number.isInteger(page) || page < 1 || !Number.isInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+    throw new ApiError(400, 'INVALID_PAGINATION', 'page must be positive and page_size must be between 1 and 100.');
+  }
+  return { page, pageSize, offset: (page - 1) * pageSize };
+}
+
+export function paged(data: unknown[], page: number, pageSize: number, totalCount: number) {
+  return { data, page, page_size: pageSize, total_count: Number(totalCount) };
+}
