@@ -50,7 +50,7 @@ export function Notice({ children, tone = 'info' }: { children: ReactNode; tone?
   return <div className={`notice notice-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>{children}</div>;
 }
 
-export function Stat({ label, value, note }: { label: string; value: string | number; note?: string }) {
+export function Stat({ label, value, note }: { label: string; value: ReactNode; note?: string }) {
   return <section className="stat-panel"><h2>{label}</h2><p className="stat-value">{value}</p>{note && <p className="stat-note">{note}</p>}</section>;
 }
 

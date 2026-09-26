@@ -4,25 +4,37 @@ import { api, apiMode } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, FormField, Notice, PageTitle, Pagination, StateBadge } from '../components/Shared';
 import { useAsync } from '../hooks/useAsync';
-import { mockSchools } from '../api/mock';
 import type { School } from '../types';
 
 export function SchoolsPage() {
   const { user } = useAuth();
   const [page, setPage] = useState(1); const [search, setSearch] = useState(''); const [district, setDistrict] = useState(''); const [status, setStatus] = useState('');
-  const result = useAsync(() => api.schools.list({ page, page_size: 10, search, district, verification_status: status }), [page, search, district, status]);
-  let rows = result.data?.data ?? [];
-  if (apiMode === 'mock' && user?.role === 'SCHOOL') rows = rows.filter((row) => row.school_id === 'sch-001');
-  const districts = [...new Set(mockSchools.map((school) => school.district))];
-  const canRegister = apiMode === 'mock';
+  const result = useAsync(async () => {
+    const pageData = await api.schools.list({ page, page_size: 100, search, district, verification_status: status });
+    if (user?.role === 'SCHOOL') {
+      const ownSchool = await api.dashboard.schoolForUser(user.user_id);
+      const own = pageData.data.filter((school) => school.school_id === ownSchool?.school_id);
+      return { ...pageData, data: own, total_count: own.length };
+    }
+    if (user?.role === 'FIELD_COORDINATOR' && apiMode === 'mock') {
+      const assignedIds = (await api.dashboard.assignedSchools(user.user_id)).map((school) => school.school_id);
+      const assigned = pageData.data.filter((school) => assignedIds.includes(school.school_id));
+      return { ...pageData, data: assigned, total_count: assigned.length };
+    }
+    return pageData;
+  }, [page, search, district, status, user?.role, user?.user_id]);
+  const rows = result.data?.data ?? [];
+  const districts = [...new Set(rows.map((school) => school.district))];
+  const canRegister = user?.role === 'ADMIN' || user?.role === 'FIELD_COORDINATOR';
   return <>
     <PageTitle title="Schools" description="Search school profiles and review verification status." actions={canRegister ? <Link className="button button-primary" to="/schools/new">Register school profile</Link> : undefined} />
-    {apiMode === 'live' && <Notice tone="info">The backend currently supports school profile detail and creation, but does not provide a paginated school collection endpoint. This register is available in demonstration mode.</Notice>}
-    <section className="panel filter-panel" aria-label="School filters"><div className="filter-grid">
+    {user?.role === 'SCHOOL' && apiMode === 'live' && <Notice>No data available yet. The backend does not expose a school collection or link a school profile to this session.</Notice>}
+    {user?.role !== 'SCHOOL' && apiMode === 'live' && <Notice tone="info">The backend currently supports school profile detail and creation, but does not provide a paginated school collection endpoint.</Notice>}
+    {user?.role !== 'SCHOOL' && <section className="panel filter-panel" aria-label="School filters"><div className="filter-grid">
       <FormField label="Search school or UDISE code" htmlFor="school-search"><input id="school-search" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Enter a school name or code" /></FormField>
       <FormField label="District" htmlFor="district-filter"><select id="district-filter" value={district} onChange={(e) => { setDistrict(e.target.value); setPage(1); }}><option value="">All districts</option>{districts.map((d) => <option key={d}>{d}</option>)}</select></FormField>
       <FormField label="Verification status" htmlFor="school-status"><select id="school-status" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }}><option value="">All statuses</option><option value="VERIFIED">Verified</option><option value="PENDING">Pending</option><option value="REJECTED">Rejected</option></select></FormField>
-    </div></section>
+    </div></section>}
     {result.error && apiMode === 'live' ? <Notice tone="warning">{result.error}</Notice> : <section className="panel">
       <DataTable<School> rows={rows} rowKey={(row) => row.school_id} columns={[
         { key: 'school_name', label: 'School', render: (row) => <Link to={`/schools/${row.school_id}`}>{row.school_name}</Link> },
@@ -38,9 +50,15 @@ export function SchoolDetailPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const school = useAsync(() => api.schools.detail(id), [id]);
+  const access = useAsync(async () => {
+    if (apiMode !== 'mock' || !user || !['SCHOOL', 'FIELD_COORDINATOR'].includes(user.role)) return true;
+    const ids = user.role === 'SCHOOL' ? [(await api.dashboard.schoolForUser(user.user_id))?.school_id] : (await api.dashboard.assignedSchools(user.user_id)).map((school) => school.school_id);
+    return ids.includes(id);
+  }, [id, user?.role, user?.user_id]);
   const history = useAsync(() => apiMode === 'mock' ? api.assessments.list(id).then((page) => ({ assessments: page.data })) : api.reports.schoolHistory(id), [id]);
+  if (['SCHOOL', 'FIELD_COORDINATOR'].includes(user?.role ?? '') && access.data === false) return <Notice tone="error">This school profile is not available to your account.</Notice>;
   if (school.loading) return <p className="muted">Loading school profile…</p>;
-  if (school.error) return <Notice tone="error">{school.error}</Notice>;
+  if (school.error || !school.data) return <Notice tone="error">{school.error || 'School profile was not found.'}</Notice>;
   const row = school.data!;
   const assessments = (history.data as { assessments?: Array<{ assessment_id: string; assessment_date: string; status: string }> } | null)?.assessments ?? [];
   return <>
@@ -55,7 +73,7 @@ export function SchoolDetailPage() {
 export function SchoolFormPage() {
   const { id } = useParams(); const navigate = useNavigate(); const editing = Boolean(id);
   const [name, setName] = useState(''); const [udise, setUdise] = useState(''); const [district, setDistrict] = useState(''); const [state, setState] = useState('Karnataka'); const [schoolType, setSchoolType] = useState<School['school_type']>('GOVERNMENT'); const [strength, setStrength] = useState(''); const [address, setAddress] = useState(''); const [error, setError] = useState('');
-  useEffect(() => { if (!id) return; api.schools.detail(id).then((school) => { setName(school.school_name); setUdise(school.udise_code ?? ''); setDistrict(school.district); setState(school.state); setSchoolType(school.school_type); setStrength(String(school.student_strength_total)); setAddress(school.address ?? ''); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'School profile could not be loaded.')); }, [id]);
+  useEffect(() => { if (!id) return; api.schools.detail(id).then((school) => { if (!school) throw new Error('School profile was not found.'); setName(school.school_name); setUdise(school.udise_code ?? ''); setDistrict(school.district); setState(school.state); setSchoolType(school.school_type); setStrength(String(school.student_strength_total)); setAddress(school.address ?? ''); }).catch((cause: unknown) => setError(cause instanceof Error ? cause.message : 'School profile could not be loaded.')); }, [id]);
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError('');
     const payload = { school_name: name, udise_code: udise || undefined, district, state, school_type: schoolType, student_strength_total: Number(strength), address: address || undefined };
     try { if (editing) await api.schools.update(id!, payload); else await api.schools.create(payload); navigate('/schools'); }

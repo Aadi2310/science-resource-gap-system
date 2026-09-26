@@ -8,13 +8,19 @@ const roleLabels: Record<Role, string> = {
 };
 const navigation: Array<{ label: string; path: string; roles: Role[] }> = [
   { label: 'Dashboard', path: '/dashboard', roles: ['SCHOOL', 'NGO', 'ADMIN', 'FIELD_COORDINATOR'] },
-  { label: 'Schools', path: '/schools', roles: ['SCHOOL', 'ADMIN', 'FIELD_COORDINATOR'] },
-  { label: 'Resource assessments', path: '/assessments', roles: ['SCHOOL', 'ADMIN', 'FIELD_COORDINATOR'] },
-  { label: 'Requirements', path: '/requirements', roles: ['SCHOOL', 'NGO', 'ADMIN', 'FIELD_COORDINATOR'] },
-  { label: 'Gap analysis', path: '/gap-analysis', roles: ['SCHOOL', 'ADMIN'] },
-  { label: 'Priority rankings', path: '/priorities', roles: ['NGO', 'ADMIN', 'FIELD_COORDINATOR'] },
+  { label: 'My School', path: '/schools', roles: ['SCHOOL'] },
+  { label: 'Assigned Schools', path: '/schools', roles: ['FIELD_COORDINATOR'] },
+  { label: 'Schools', path: '/schools', roles: ['ADMIN'] },
+  { label: 'Assessments', path: '/assessments', roles: ['SCHOOL', 'ADMIN', 'FIELD_COORDINATOR'] },
+  { label: 'My Requirements', path: '/requirements', roles: ['SCHOOL'] },
+  { label: 'Prioritized Requirements', path: '/requirements', roles: ['NGO'] },
+  { label: 'My Interventions', path: '/requirements', roles: ['NGO'] },
+  { label: 'Requirements', path: '/requirements', roles: ['ADMIN', 'FIELD_COORDINATOR'] },
+  { label: 'Gap Analysis', path: '/gap-analysis', roles: ['ADMIN'] },
+  { label: 'Priority Rankings', path: '/priorities', roles: ['NGO', 'ADMIN', 'FIELD_COORDINATOR'] },
   { label: 'Reports', path: '/reports', roles: ['SCHOOL', 'NGO', 'ADMIN'] },
   { label: 'User management', path: '/users', roles: ['ADMIN'] },
+  { label: 'Resource Configuration', path: '/resource-configuration', roles: ['ADMIN'] },
 ];
 
 function labelForPath(path: string) {

@@ -1,7 +1,6 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiMode } from '../api/client';
-import { mockSchools } from '../api/mock';
 import { useAuth } from '../auth/AuthContext';
 import { FormField, Notice, PageTitle, StateBadge, DataTable } from '../components/Shared';
 import { useAsync } from '../hooks/useAsync';
@@ -9,7 +8,8 @@ import type { Assessment, Resource, ResourceCategory, SchoolResource } from '../
 
 export function AssessmentsPage() {
   const { user } = useAuth();
-  const [schoolId, setSchoolId] = useState(apiMode === 'mock' ? 'sch-001' : '');
+  const [searchParams] = useSearchParams();
+  const [schoolId, setSchoolId] = useState(searchParams.get('school') ?? '');
   const [submittedMessage, setSubmittedMessage] = useState('');
   const [rejectingId, setRejectingId] = useState(''); const [rejectionReason, setRejectionReason] = useState('');
   const emptyList = { data: [] as Assessment[], page: 1, page_size: 100, total_count: 0 };
@@ -27,7 +27,16 @@ export function AssessmentsPage() {
       setRejectingId(''); setRejectionReason(''); list.reload();
     } catch (e) { setSubmittedMessage(e instanceof Error ? e.message : 'The assessment could not be verified.'); }
   }
-  const schools = apiMode === 'mock' ? mockSchools : [];
+  const schoolOptions = useAsync(async () => {
+    if (!user || apiMode !== 'mock') return [];
+    if (user.role === 'SCHOOL') { const school = await api.dashboard.schoolForUser(user.user_id); return school ? [school] : []; }
+    if (user.role === 'FIELD_COORDINATOR') return api.dashboard.assignedSchools(user.user_id);
+    return (await api.schools.list({ page: 1, page_size: 100 })).data;
+  }, [user?.role, user?.user_id]);
+  const schools = schoolOptions.data ?? [];
+  useEffect(() => {
+    if (!schools.some((school) => school.school_id === schoolId) && schools.length) setSchoolId(schools[0].school_id);
+  }, [schoolId, schools]);
   return <>
     <PageTitle title="Resource assessments" description="Review school resource snapshots and record new assessment data." actions={(user?.role === 'SCHOOL' || user?.role === 'FIELD_COORDINATOR' || apiMode === 'mock') ? <Link className="button button-primary" to={`/assessments/new?school=${schoolId}`}>Record an assessment</Link> : undefined} />
     {apiMode === 'live' && <Notice tone="info">Assessment history is requested for one school at a time. Enter a school ID to view records; the backend does not provide a school collection endpoint.</Notice>}
@@ -49,10 +58,21 @@ const emptyEntry = (): Entry => ({ resource_id: '', required_qty: '', available_
 
 export function AssessmentFormPage() {
   const [params] = useSearchParams();
-  const [schoolId, setSchoolId] = useState(params.get('school') ?? 'sch-001');
+  const { user } = useAuth();
+  const [schoolId, setSchoolId] = useState(params.get('school') ?? '');
   const [categoryId, setCategoryId] = useState('');
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [entries, setEntries] = useState<Entry[]>([emptyEntry()]);
+  const schoolOptions = useAsync(async () => {
+    if (!user || apiMode !== 'mock') return [];
+    if (user.role === 'SCHOOL') { const school = await api.dashboard.schoolForUser(user.user_id); return school ? [school] : []; }
+    if (user.role === 'FIELD_COORDINATOR') return api.dashboard.assignedSchools(user.user_id);
+    return [];
+  }, [user?.role, user?.user_id]);
+  const allowedSchools = schoolOptions.data ?? [];
+  useEffect(() => {
+    if (!allowedSchools.some((school) => school.school_id === schoolId) && allowedSchools.length) setSchoolId(allowedSchools[0].school_id);
+  }, [allowedSchools, schoolId]);
   const [error, setError] = useState(''); const [message, setMessage] = useState('');
   const categories = useAsync(() => api.resources.categories());
   const categoryRows = categories.data?.data ?? [];
@@ -78,7 +98,7 @@ export function AssessmentFormPage() {
     {categories.error && <Notice tone="warning">{categories.error}</Notice>}{error && <Notice tone="error">{error}</Notice>}{message && <Notice tone="success">{message}</Notice>}
     <form className="form-stack" onSubmit={save}>
       <section className="panel form-panel"><h2>Assessment details</h2><div className="form-row">
-        <FormField label="School ID" htmlFor="assessment-school-id"><input id="assessment-school-id" required value={schoolId} onChange={(e) => setSchoolId(e.target.value)} /></FormField>
+        {apiMode === 'mock' ? <FormField label="School" htmlFor="assessment-school-id"><select id="assessment-school-id" required value={schoolId} onChange={(e) => setSchoolId(e.target.value)}>{allowedSchools.map((school) => <option key={school.school_id} value={school.school_id}>{school.school_name}</option>)}</select></FormField> : <FormField label="School ID" htmlFor="assessment-school-id"><input id="assessment-school-id" required value={schoolId} onChange={(e) => setSchoolId(e.target.value)} /></FormField>}
         <FormField label="Assessment date" htmlFor="assessment-date"><input id="assessment-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} /></FormField>
       </div></section>
       <section className="panel form-panel"><div className="panel-heading"><div><h2>Resource entries</h2><p>Record quantities and the condition of available items.</p></div><button className="button button-secondary button-small" type="button" onClick={() => setEntries((rows) => [...rows, emptyEntry()])}>Add resource row</button></div>

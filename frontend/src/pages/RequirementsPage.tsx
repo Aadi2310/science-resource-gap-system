@@ -11,10 +11,15 @@ export function RequirementsPage() {
   const { user } = useAuth();
   const [page, setPage] = useState(1); const [priority, setPriority] = useState(''); const [status, setStatus] = useState(''); const [district, setDistrict] = useState(''); const [category, setCategory] = useState('');
   const categories = useAsync(() => api.resources.categories());
-  const result = useAsync(() => api.requirements.list({ page, page_size: 10, priority_class: priority, status, district: district || undefined, resource_category: category || undefined }), [page, priority, status, district, category]);
-  let rows = result.data?.data ?? [];
-  if (apiMode === 'mock' && user?.role === 'SCHOOL') rows = rows.filter((r) => r.school_id === 'sch-001');
-  if (apiMode === 'mock' && user?.role === 'FIELD_COORDINATOR') rows = rows.filter((r) => ['Kolar', 'Tumakuru'].includes(r.district));
+  const result = useAsync(async () => {
+    const result = await api.requirements.list({ page, page_size: 100, priority_class: priority, status, district: district || undefined, resource_category: category || undefined });
+    if (apiMode !== 'mock' || !user) return result;
+    const schoolIds = user.role === 'SCHOOL' ? [(await api.dashboard.schoolForUser(user.user_id))?.school_id].filter(Boolean) as string[] : user.role === 'FIELD_COORDINATOR' ? (await api.dashboard.assignedSchools(user.user_id)).map((school) => school.school_id) : undefined;
+    if (!schoolIds) return result;
+    const scoped = result.data.filter((row) => schoolIds.includes(row.school_id));
+    return { ...result, data: scoped, total_count: scoped.length };
+  }, [page, priority, status, district, category, user?.role, user?.user_id]);
+  const rows = result.data?.data.slice((page - 1) * 10, page * 10) ?? [];
   const districts = apiMode === 'mock' ? [...new Set(mockSchools.map((s) => s.district))] : [];
   return <>
     <PageTitle title="Requirements" description="Review resource gaps from verified school assessments and track follow-up status." />
@@ -44,6 +49,13 @@ export function RequirementDetailPage() {
   const { id = '' } = useParams();
   const { user } = useAuth();
   const result = useAsync(() => api.requirements.detail(id), [id]);
+  const access = useAsync(async () => {
+    if (apiMode !== 'mock' || !user || !['SCHOOL', 'FIELD_COORDINATOR'].includes(user.role)) return true;
+    const requirement = await api.requirements.detail(id);
+    if (!requirement) return false;
+    const schoolIds = user.role === 'SCHOOL' ? [(await api.dashboard.schoolForUser(user.user_id))?.school_id] : (await api.dashboard.assignedSchools(user.user_id)).map((school) => school.school_id);
+    return schoolIds.includes(requirement.school_id);
+  }, [id, user?.role, user?.user_id]);
   const [newStatus, setNewStatus] = useState(''); const [fulfilledQty, setFulfilledQty] = useState(''); const [reason, setReason] = useState(''); const [comments, setComments] = useState(''); const [message, setMessage] = useState(''); const [error, setError] = useState('');
   const row = result.data as (Requirement & { fulfilled_qty?: number; accepted_gap_qty?: number; interventions?: unknown[]; feedback?: unknown[] }) | null;
   async function accept() { if (!row) return; setError(''); setMessage(''); try { await api.requirements.accept(row.requirement_id, row.version); setMessage('The requirement was accepted for action.'); result.reload(); } catch (e) { setError(e instanceof Error ? e.message : 'The action could not be completed.'); } }
@@ -56,6 +68,7 @@ export function RequirementDetailPage() {
   async function acknowledge() { if (!row) return; try { await api.requirements.acknowledgeChange(row.requirement_id, row.version); setMessage('The latest verified assessment data was acknowledged.'); result.reload(); } catch (e) { setError(e instanceof Error ? e.message : 'The change could not be acknowledged.'); } }
   async function confirm(confirmation: 'CONFIRMED' | 'DISPUTED') { if (!row) return; try { await api.requirements.feedback(row.requirement_id, { confirmation, expected_version: row.version, comments }); setMessage(confirmation === 'CONFIRMED' ? 'School confirmation was recorded.' : 'The requirement was referred for dispute review.'); result.reload(); } catch (e) { setError(e instanceof Error ? e.message : 'Feedback could not be recorded.'); } }
   if (result.loading) return <p className="muted">Loading requirement details…</p>;
+  if (access.data === false) return <Notice tone="error">This requirement is outside your assigned school access.</Notice>;
   if (result.error || !row) return <Notice tone="error">{result.error || 'Requirement record was not found.'}</Notice>;
   const options = [...(nextByStatus[row.status] ?? [])];
   if (user?.role === 'ADMIN' && row.status === 'UNDER_REVIEW') options.push('OPEN');

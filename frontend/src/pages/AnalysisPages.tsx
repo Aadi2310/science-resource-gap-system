@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api, apiMode } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { mockSchools } from '../api/mock';
 import { DataTable, FormField, Notice, PageTitle, StateBadge } from '../components/Shared';
 import { useAsync } from '../hooks/useAsync';
@@ -31,8 +32,15 @@ export function GapAnalysisPage() {
 }
 
 export function PriorityPage() {
+  const { user } = useAuth();
   const [priority, setPriority] = useState(''); const [district, setDistrict] = useState(''); const [status, setStatus] = useState('');
-  const requirements = useAsync(() => api.requirements.list({ page: 1, page_size: 100, priority_class: priority, district: district || undefined, status: status || undefined }), [priority, district, status]);
+  const requirements = useAsync(async () => {
+    const result = await api.requirements.list({ page: 1, page_size: 100, priority_class: priority, district: district || undefined, status: status || undefined });
+    if (apiMode !== 'mock' || user?.role !== 'FIELD_COORDINATOR') return result;
+    const ids = (await api.dashboard.assignedSchools(user.user_id)).map((school) => school.school_id);
+    const data = result.data.filter((row) => ids.includes(row.school_id));
+    return { ...result, data, total_count: data.length };
+  }, [priority, district, status, user?.role, user?.user_id]);
   const rows = requirements.data?.data ?? [];
   const districtChoices = useMemo(() => [...new Set(rows.map((row) => row.district))], [rows]);
   return <>

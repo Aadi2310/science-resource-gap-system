@@ -44,12 +44,21 @@ const adminUsers: AdminUser[] = [
   { user_id: 'usr-4', email: 'program@science-foundation.example', role: 'NGO', full_name: 'Science Foundation Officer', is_active: true },
 ];
 
+// Explicit demo relationships used by role dashboards.
+export const mockSchoolAssignments: Record<string, string[]> = {
+  'demo-field_coordinator': ['sch-001', 'sch-002'],
+};
+export const mockSchoolAccounts: Record<string, string> = { 'demo-school': 'sch-001' };
+
 function page<T>(data: T[], pageNo: number, pageSize: number): Page<T> {
   const start = (pageNo - 1) * pageSize;
   return { data: data.slice(start, start + pageSize), page: pageNo, page_size: pageSize, total_count: data.length };
 }
 
 export const mockApi = {
+  async schoolForUser(userId: string) { const id = mockSchoolAccounts[userId]; return id ? schools.find((school) => school.school_id === id) ?? null : null; },
+  async assignedSchools(userId: string) { const ids = mockSchoolAssignments[userId] ?? []; return schools.filter((school) => ids.includes(school.school_id)); },
+  async allAssessments() { return [...assessments]; },
   async schools(params: { page: number; page_size: number; search?: string; district?: string; verification_status?: string }) {
     let rows = [...schools];
     if (params.search) rows = rows.filter((s) => `${s.school_name} ${s.udise_code} ${s.district}`.toLowerCase().includes(params.search!.toLowerCase()));
@@ -57,7 +66,7 @@ export const mockApi = {
     if (params.verification_status) rows = rows.filter((s) => s.verification_status === params.verification_status);
     return page(rows, params.page, params.page_size);
   },
-  async school(id: string) { return schools.find((s) => s.school_id === id) ?? schools[0]; },
+  async school(id: string) { return schools.find((s) => s.school_id === id) ?? null; },
   async createSchool(payload: Record<string, unknown>) {
     const row = { ...payload, school_id: `sch-${Date.now()}`, verification_status: 'PENDING' as const } as School;
     schools.unshift(row); return row;
@@ -77,7 +86,7 @@ export const mockApi = {
     if (params.school_id) rows = rows.filter((r) => r.school_id === params.school_id);
     return page(rows, params.page, params.page_size);
   },
-  async requirement(id: string) { return requirements.find((r) => r.requirement_id === id) ?? requirements[0]; },
+  async requirement(id: string) { return requirements.find((r) => r.requirement_id === id) ?? null; },
   async acceptRequirement(id: string) { const row = requirements.find((r) => r.requirement_id === id); if (!row) throw new Error('Requirement was not found.'); row.status = 'ACCEPTED'; row.version += 1; return row; },
   async updateRequirement(id: string, payload: Record<string, unknown>) { const row = requirements.find((r) => r.requirement_id === id); if (!row) throw new Error('Requirement was not found.'); if (typeof payload.new_status === 'string') row.status = payload.new_status as Requirement['status']; Object.assign(row, payload); row.version += 1; return row; },
   async recordFeedback(id: string, payload: Record<string, unknown>) { const row = requirements.find((r) => r.requirement_id === id); if (!row) throw new Error('Requirement was not found.'); if (payload.confirmation === 'CONFIRMED') row.status = 'CLOSED'; if (payload.confirmation === 'DISPUTED') row.status = 'DISPUTED'; row.version += 1; return row; },

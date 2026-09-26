@@ -66,6 +66,11 @@ function query(params: Record<string, string | number | undefined>) {
 }
 
 export const api = {
+  dashboard: {
+    schoolForUser(userId: string) { return apiMode === 'mock' ? mockApi.schoolForUser(userId) : Promise.resolve(null); },
+    assignedSchools(userId: string) { return apiMode === 'mock' ? mockApi.assignedSchools(userId) : Promise.resolve([]); },
+    allAssessments() { return apiMode === 'mock' ? mockApi.allAssessments() : Promise.resolve([]); },
+  },
   auth: {
     async login(email: string, password: string, demoRole: UserSession['role']): Promise<UserSession> {
       if (apiMode === 'mock') {
@@ -112,7 +117,7 @@ export const api = {
       if (apiMode === 'mock') return mockApi.schools(params);
       throw new ApiError('The backend does not expose a school collection endpoint yet.', 501, 'ENDPOINT_NOT_AVAILABLE');
     },
-    detail(id: string): Promise<School> { return apiMode === 'mock' ? mockApi.school(id) : request<School>(`/schools/${id}`); },
+    detail(id: string): Promise<School | null> { return apiMode === 'mock' ? mockApi.school(id) : request<School>(`/schools/${id}`); },
     create(payload: Record<string, unknown>): Promise<School> { return apiMode === 'mock' ? mockApi.createSchool(payload) : request<School>('/schools', { method: 'POST', body: JSON.stringify(payload) }); },
     update(id: string, payload: Record<string, unknown>): Promise<School> {
       if (apiMode === 'mock') return mockApi.updateSchool(id, payload);
@@ -124,7 +129,7 @@ export const api = {
       if (apiMode === 'mock') return mockApi.requirements(params);
       return request<Page<Requirement>>(`/requirements?${query(params)}`);
     },
-    detail(id: string): Promise<Requirement> { return apiMode === 'mock' ? mockApi.requirement(id) : request<Requirement>(`/requirements/${id}`); },
+    detail(id: string): Promise<Requirement | null> { return apiMode === 'mock' ? mockApi.requirement(id) : request<Requirement>(`/requirements/${id}`); },
     async accept(id: string, expected_version: number) {
       if (apiMode === 'mock') return mockApi.acceptRequirement(id);
       return request<{ status: string }>(`/requirements/${id}/accept`, { method: 'POST', body: JSON.stringify({ expected_version }) });

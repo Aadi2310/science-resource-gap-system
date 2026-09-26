@@ -1,20 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { api, apiMode } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { DataTable, FormField, Notice, PageTitle, Stat } from '../components/Shared';
 import { useAsync } from '../hooks/useAsync';
-import { mockSchools } from '../api/mock';
 import type { Assessment, Requirement, SummaryReport } from '../types';
 
 export function ReportsPage() {
   const { user } = useAuth();
-  const [schoolId, setSchoolId] = useState(apiMode === 'mock' ? 'sch-001' : '');
+  const [schoolId, setSchoolId] = useState('');
   const isSummaryRole = user?.role === 'ADMIN' || user?.role === 'NGO';
   const summary = useAsync(() => isSummaryRole ? api.reports.summary() : Promise.resolve(null), [user?.role]);
   const coverage = useAsync(() => user?.role === 'ADMIN' ? api.reports.coverage() : Promise.resolve(null), [user?.role]);
   const turnaround = useAsync(() => user?.role === 'ADMIN' ? api.reports.turnaround() : Promise.resolve([]), [user?.role]);
   const schoolHistory = useAsync(() => user?.role === 'SCHOOL' && schoolId ? api.reports.schoolHistory(schoolId) : Promise.resolve(null), [user?.role, schoolId]);
+  const schoolOptions = useAsync(async () => {
+    if (apiMode !== 'mock' || user?.role !== 'SCHOOL') return [];
+    const school = await api.dashboard.schoolForUser(user.user_id);
+    return school ? [school] : [];
+  }, [user?.role, user?.user_id]);
+  useEffect(() => { const own = schoolOptions.data?.[0]; if (own && schoolId !== own.school_id) setSchoolId(own.school_id); }, [schoolOptions.data, schoolId]);
   const data = summary.data as SummaryReport | null;
   const categoryRows = data?.open_by_district_and_category ?? [];
   const chartData = Object.values(categoryRows.reduce<Record<string, { district: string; CRITICAL: number; HIGH: number; MEDIUM: number; LOW: number }>>((acc, row) => {
@@ -33,7 +38,7 @@ export function ReportsPage() {
     const history = schoolHistory.data as { assessments?: Assessment[]; requirements?: Requirement[] } | null;
     return <>
       <PageTitle title="School history report" description="Review assessment and requirement history for your school." actions={<button className="button button-secondary print-hide" onClick={() => window.print()}>Print report</button>} />
-      {apiMode === 'mock' ? <FormField label="School" htmlFor="history-school"><select id="history-school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)}>{mockSchools.map((school) => <option key={school.school_id} value={school.school_id}>{school.school_name}</option>)}</select></FormField> : <FormField label="School ID" htmlFor="history-school"><input id="history-school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)} /></FormField>}
+      {apiMode === 'mock' ? <FormField label="School" htmlFor="history-school"><select id="history-school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)}>{(schoolOptions.data ?? []).map((school) => <option key={school.school_id} value={school.school_id}>{school.school_name}</option>)}</select></FormField> : <FormField label="School ID" htmlFor="history-school"><input id="history-school" value={schoolId} onChange={(e) => setSchoolId(e.target.value)} /></FormField>}
       {schoolHistory.error && <Notice tone="error">{schoolHistory.error}</Notice>}
       <section className="panel"><h2>Assessment history</h2><DataTable<Assessment> rows={history?.assessments ?? []} rowKey={(row) => row.assessment_id} columns={[{ key: 'assessment_date', label: 'Assessment date' }, { key: 'assessment_id', label: 'Assessment reference' }, { key: 'status', label: 'Status' }]} /></section>
       <section className="panel"><h2>Requirement history</h2><DataTable<Requirement> rows={history?.requirements ?? []} rowKey={(row) => row.requirement_id} columns={[{ key: 'resource_name', label: 'Resource' }, { key: 'gap_qty', label: 'Gap quantity' }, { key: 'priority_class', label: 'Priority' }, { key: 'status', label: 'Status' }]} /></section>

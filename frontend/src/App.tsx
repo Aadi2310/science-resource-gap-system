@@ -11,6 +11,7 @@ import { RequirementsPage, RequirementDetailPage } from './pages/RequirementsPag
 import { GapAnalysisPage, PriorityPage } from './pages/AnalysisPages';
 import { ReportsPage } from './pages/ReportsPage';
 import { UserManagementPage } from './pages/UserManagementPage';
+import { ResourceConfigurationPage } from './pages/ResourceConfigurationPage';
 
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -26,7 +27,6 @@ function AdminOnly({ children }: { children: React.ReactNode }) {
 
 function RoleOnly({ children, roles }: { children: React.ReactNode; roles: Role[] }) {
   const { user } = useAuth();
-  if (apiMode === 'mock') return <>{children}</>;
   return user && roles.includes(user.role) ? <>{children}</> : <Navigate to="/dashboard" replace />;
 }
 
@@ -39,18 +39,19 @@ export function App() {
       <Route element={<Protected><PortalLayout /></Protected>}>
         <Route path="/" element={<Navigate to="/dashboard" replace />} />
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/schools" element={<SchoolsPage />} />
-        <Route path="/schools/new" element={<RoleOnly roles={['SCHOOL']}><SchoolFormPage /></RoleOnly>} />
+        <Route path="/schools" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><SchoolsPage /></RoleOnly>} />
+        <Route path="/schools/new" element={<RoleOnly roles={['ADMIN','FIELD_COORDINATOR']}><SchoolFormPage /></RoleOnly>} />
         <Route path="/schools/:id" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><SchoolDetailPage /></RoleOnly>} />
-        <Route path="/schools/:id/edit" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><SchoolFormPage /></RoleOnly>} />
-        <Route path="/assessments" element={<AssessmentsPage />} />
+        <Route path="/schools/:id/edit" element={<RoleOnly roles={['ADMIN','FIELD_COORDINATOR']}><SchoolFormPage /></RoleOnly>} />
+        <Route path="/assessments" element={<RoleOnly roles={['SCHOOL','ADMIN','FIELD_COORDINATOR']}><AssessmentsPage /></RoleOnly>} />
         <Route path="/assessments/new" element={<RoleOnly roles={['SCHOOL','FIELD_COORDINATOR']}><AssessmentFormPage /></RoleOnly>} />
-        <Route path="/requirements" element={<RequirementsPage />} />
-        <Route path="/requirements/:id" element={<RequirementDetailPage />} />
-        <Route path="/gap-analysis" element={<RoleOnly roles={['SCHOOL','ADMIN']}><GapAnalysisPage /></RoleOnly>} />
-        <Route path="/priorities" element={<PriorityPage />} />
-        <Route path="/reports" element={<ReportsPage />} />
+        <Route path="/requirements" element={<RoleOnly roles={['SCHOOL','NGO','ADMIN','FIELD_COORDINATOR']}><RequirementsPage /></RoleOnly>} />
+        <Route path="/requirements/:id" element={<RoleOnly roles={['SCHOOL','NGO','ADMIN','FIELD_COORDINATOR']}><RequirementDetailPage /></RoleOnly>} />
+        <Route path="/gap-analysis" element={<RoleOnly roles={['ADMIN']}><GapAnalysisPage /></RoleOnly>} />
+        <Route path="/priorities" element={<RoleOnly roles={['NGO','ADMIN','FIELD_COORDINATOR']}><PriorityPage /></RoleOnly>} />
+        <Route path="/reports" element={<RoleOnly roles={['SCHOOL','NGO','ADMIN']}><ReportsPage /></RoleOnly>} />
         <Route path="/users" element={<AdminOnly><UserManagementPage /></AdminOnly>} />
+        <Route path="/resource-configuration" element={<AdminOnly><ResourceConfigurationPage /></AdminOnly>} />
       </Route>
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} replace />} />
     </Routes>
